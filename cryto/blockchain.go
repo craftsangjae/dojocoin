@@ -1,14 +1,12 @@
 package cryto
 
 import (
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"github.com/craftsangjae/dojocoin/db"
 	"github.com/craftsangjae/dojocoin/utils"
-	"strconv"
 	strings "strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -29,6 +27,7 @@ type block struct {
 	Height     int
 	Difficulty int
 	Nonce      int
+	Timestamp  int
 }
 
 type blockChain struct {
@@ -54,41 +53,38 @@ func (chain *blockChain) persist() {
 //
 func newBlock(data string) *block {
 	prevHash := chain.NewestHash
+	return &block{data, "", prevHash, chain.Height + 1, difficulty, 0, 0}
+}
 
-	target := createTarget()
-	nounce := 1
+func (b *block) mine() {
+	target := strings.Repeat("0", b.Difficulty)
 	for {
-		newHash := calculateHash(data, prevHash, chain.Height, nounce)
-		if strings.HasPrefix(newHash, target) {
-			return &block{data, newHash, prevHash, chain.Height + 1, difficulty, nounce}
+		b.Timestamp = int(time.Now().Unix())
+		hash := utils.Hash(b)
+		if strings.HasPrefix(hash, target) {
+			b.Hash = hash
+			break
 		}
-		nounce++
+		b.Nonce++
 	}
 }
 
-func createTarget() string {
-	return strings.Repeat("0", difficulty)
-}
-
-func calculateHash(data string, prevHash string, height int, nounce int) string {
-	hashBytes := sha256.Sum256([]byte(data + prevHash + strconv.Itoa(height) + strconv.Itoa(nounce)))
-	return fmt.Sprintf("%x", hashBytes)
-}
-
-func updateChain(b *block) {
-	chain.NewestHash = b.Hash
-	chain.Height = b.Height
+func (chain *blockChain) update(newBlock *block) {
+	chain.NewestHash = newBlock.Hash
+	chain.Height = newBlock.Height
 }
 
 func AddBlock(data string) {
 	b := newBlock(data)
+	b.mine()
 	b.persist()
-	updateChain(b)
+
+	chain.update(b)
 	chain.persist()
 }
 
 func FindBlock(hash string) *block {
-	b := &block{"", "", "", 1, difficulty, 0}
+	b := &block{"", "", "", 1, difficulty, 0, 0}
 	data := db.FindData(hash)
 	utils.FromBytes(b, data)
 	return b
