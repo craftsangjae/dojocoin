@@ -7,7 +7,12 @@ import (
 	"github.com/craftsangjae/dojocoin/db"
 	"github.com/craftsangjae/dojocoin/utils"
 	"strconv"
+	strings "strings"
 	"sync"
+)
+
+const (
+	difficulty int = 2
 )
 
 var chain *blockChain
@@ -18,10 +23,12 @@ func init() {
 }
 
 type block struct {
-	Data     string
-	Hash     string
-	PrevHash string
-	Height   int
+	Data       string
+	Hash       string
+	PrevHash   string
+	Height     int
+	Difficulty int
+	Nonce      int
 }
 
 type blockChain struct {
@@ -30,15 +37,7 @@ type blockChain struct {
 }
 
 func (b *block) MarshalJson() string {
-	val, err := json.MarshalIndent(struct {
-		Data     string `json:"data"`
-		PrevHash string `json:"prevHash"`
-		Hash     string `json:"hash"`
-	}{
-		Data:     b.Data,
-		PrevHash: b.PrevHash,
-		Hash:     b.Hash,
-	}, "", "  ")
+	val, err := json.MarshalIndent(b, "", "  ")
 	utils.HandleErr(err)
 	return string(val)
 }
@@ -55,12 +54,24 @@ func (chain *blockChain) persist() {
 //
 func newBlock(data string) *block {
 	prevHash := chain.NewestHash
-	newHash := calculateHash(data, prevHash, chain.Height)
-	return &block{data, newHash, prevHash, chain.Height + 1}
+
+	target := createTarget()
+	nounce := 1
+	for {
+		newHash := calculateHash(data, prevHash, chain.Height, nounce)
+		if strings.HasPrefix(newHash, target) {
+			return &block{data, newHash, prevHash, chain.Height + 1, difficulty, nounce}
+		}
+		nounce++
+	}
 }
 
-func calculateHash(data string, prevHash string, height int) string {
-	hashBytes := sha256.Sum256([]byte(data + prevHash + strconv.Itoa(height)))
+func createTarget() string {
+	return strings.Repeat("0", difficulty)
+}
+
+func calculateHash(data string, prevHash string, height int, nounce int) string {
+	hashBytes := sha256.Sum256([]byte(data + prevHash + strconv.Itoa(height) + strconv.Itoa(nounce)))
 	return fmt.Sprintf("%x", hashBytes)
 }
 
@@ -77,7 +88,7 @@ func AddBlock(data string) {
 }
 
 func FindBlock(hash string) *block {
-	b := &block{"", "", "", 1}
+	b := &block{"", "", "", 1, difficulty, 0}
 	data := db.FindData(hash)
 	utils.FromBytes(b, data)
 	return b
