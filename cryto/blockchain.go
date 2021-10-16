@@ -1,9 +1,13 @@
 package cryto
 
 import (
+	"bytes"
 	"crypto/sha256"
+	gob "encoding/gob"
+	"encoding/json"
 	"fmt"
 	"github.com/craftsangjae/dojocoin/db"
+	"github.com/craftsangjae/dojocoin/utils"
 	"strconv"
 	"sync"
 )
@@ -16,10 +20,10 @@ func init() {
 }
 
 type block struct {
-	data     string
-	hash     string
-	prevHash string
-	height   int `json:"height"`
+	Data     string
+	Hash     string
+	PrevHash string
+	Height   int
 }
 
 type blockChain struct {
@@ -27,12 +31,36 @@ type blockChain struct {
 	Height     int    `json:"height"`
 }
 
-func (b *block) persist() {
-	db.SaveBlock(b.hash, b)
+func (b *block) MarshalJson() string {
+	val, err := json.MarshalIndent(struct {
+		Data     string `json:"data"`
+		PrevHash string `json:"prevHash"`
+		Hash     string `json:"hash"`
+	}{
+		Data:     b.Data,
+		PrevHash: b.PrevHash,
+		Hash:     b.Hash,
+	}, "", "  ")
+	utils.HandleErr(err)
+	return string(val)
 }
 
-func (b *blockChain) persist() {
-	db.SaveBlockchain(b)
+func (chain *blockChain) restore(data []byte) {
+	a := gob.NewDecoder(bytes.NewReader(data))
+	a.Decode(chain)
+}
+
+func (b *block) restore(data []byte) {
+	a := gob.NewDecoder(bytes.NewReader(data))
+	a.Decode(b)
+}
+
+func (b *block) persist() {
+	db.SaveBlock(b.Hash, b)
+}
+
+func (chain *blockChain) persist() {
+	db.SaveBlockchain(chain)
 }
 
 // 새 블록을 생성합니다
@@ -49,8 +77,8 @@ func calculateHash(data string, prevHash string, height int) string {
 }
 
 func updateChain(b *block) {
-	chain.NewestHash = b.hash
-	chain.Height = b.height
+	chain.NewestHash = b.Hash
+	chain.Height = b.Height
 }
 
 func AddBlock(data string) {
@@ -60,11 +88,23 @@ func AddBlock(data string) {
 	chain.persist()
 }
 
+func FindBlock(hash string) *block {
+	b := block{"", "", "", 1}
+	data := db.FindData(hash)
+	b.restore(data)
+	return &b
+}
+
 func GetBlockChain() *blockChain {
 	if chain == nil {
 		once.Do(func() {
-			chain = &blockChain{}
-			AddBlock("GENESIS BLOCK")
+			checkpoint := db.LoadCheckpoint()
+			chain = &blockChain{"", 0}
+			if checkpoint == nil {
+				AddBlock("GENESIS BLOCK")
+			} else {
+				chain.restore(checkpoint)
+			}
 		})
 	}
 	return chain
