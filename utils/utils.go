@@ -21,3 +21,8 @@ func ToBytes(i interface{}) []byte {
 	}
 	return blockBuffer.Bytes()
 }
+
+func FromBytes(i interface{}, data []byte) {
+	a := gob.NewDecoder(bytes.NewReader(data))
+	HandleErr(a.Decode(i))
+}

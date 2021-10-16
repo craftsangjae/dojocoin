@@ -1,9 +1,7 @@
 package cryto
 
 import (
-	"bytes"
 	"crypto/sha256"
-	gob "encoding/gob"
 	"encoding/json"
 	"fmt"
 	"github.com/craftsangjae/dojocoin/db"
@@ -45,16 +43,6 @@ func (b *block) MarshalJson() string {
 	return string(val)
 }
 
-func (chain *blockChain) restore(data []byte) {
-	a := gob.NewDecoder(bytes.NewReader(data))
-	a.Decode(chain)
-}
-
-func (b *block) restore(data []byte) {
-	a := gob.NewDecoder(bytes.NewReader(data))
-	a.Decode(b)
-}
-
 func (b *block) persist() {
 	db.SaveBlock(b.Hash, b)
 }
@@ -89,10 +77,10 @@ func AddBlock(data string) {
 }
 
 func FindBlock(hash string) *block {
-	b := block{"", "", "", 1}
+	b := &block{"", "", "", 1}
 	data := db.FindData(hash)
-	b.restore(data)
-	return &b
+	utils.FromBytes(b, data)
+	return b
 }
 
 func GetBlockChain() *blockChain {
@@ -103,9 +91,22 @@ func GetBlockChain() *blockChain {
 			if checkpoint == nil {
 				AddBlock("GENESIS BLOCK")
 			} else {
-				chain.restore(checkpoint)
+				utils.FromBytes(chain, checkpoint)
 			}
 		})
 	}
 	return chain
+}
+
+func ListAllBlocks() []*block {
+	currentHash := GetBlockChain().NewestHash
+	blocks := make([]*block, 0)
+	for {
+		if currentHash == "" {
+			break
+		}
+		blocks = append(blocks, FindBlock(currentHash))
+		currentHash = blocks[len(blocks)-1].PrevHash
+	}
+	return blocks
 }
