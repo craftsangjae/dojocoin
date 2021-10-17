@@ -25,13 +25,13 @@ func init() {
 }
 
 type block struct {
-	Data       string
-	Hash       string
-	PrevHash   string
-	Height     int
-	Difficulty int
-	Nonce      int
-	Timestamp  int
+	Transactions []*Tx
+	Hash         string
+	PrevHash     string
+	Height       int
+	Difficulty   int
+	Nonce        int
+	Timestamp    int
 }
 
 type blockChain struct {
@@ -58,7 +58,7 @@ func (chain *blockChain) recalculateDifficulty() int {
 	var err error
 	newstBlock, err := findLatestBlock(0)
 	utils.HandleErr(err)
-	lastRecalculatedBlock, err := findLatestBlock(difficultyInterval)
+	lastRecalculatedBlock, err := findLatestBlock(difficultyInterval - 1)
 	utils.HandleErr(err)
 	actualTime := (newstBlock.Timestamp - lastRecalculatedBlock.Timestamp) / 60
 	expectedTime := difficultyInterval * blockInterval
@@ -86,13 +86,13 @@ func (chain *blockChain) difficulty() int {
 
 // 새 블록을 생성합니다
 //
-func newBlock(data string) *block {
+func newBlock(transactions []*Tx) *block {
 	prevHash := chain.NewestHash
-	return &block{data, "", prevHash, chain.Height + 1, chain.difficulty(), 0, 0}
+	return &block{transactions, "", prevHash, chain.Height + 1, chain.difficulty(), 0, 0}
 }
 
 func initBlock() *block {
-	return &block{"", "", "", 0, 0, 0, 0}
+	return &block{[]*Tx{}, "", "", 0, 0, 0, 0}
 }
 
 func (b *block) mine() {
@@ -114,8 +114,35 @@ func (chain *blockChain) update(newBlock *block) {
 	chain.CurrentDifficulty = newBlock.Difficulty
 }
 
-func AddBlock(data string) {
-	b := newBlock(data)
+func (chain *blockChain) txOuts() []*TxOut {
+	output := make([]*TxOut, 0)
+	for _, block := range ListAllBlocks() {
+		for _, tx := range block.Transactions {
+			output = append(output, tx.TxOuts...)
+		}
+	}
+	return output
+}
+
+func (chain *blockChain) txOutsByAddress(address string) []*TxOut {
+	output := make([]*TxOut, 0)
+	for _, tx := range chain.txOuts() {
+		if tx.Owner == address {
+			output = append(output, tx)
+		}
+	}
+	return output
+}
+
+func (chain *blockChain) BalanceByAddress(address string) (output int) {
+	for _, tx := range chain.txOutsByAddress(address) {
+		output += tx.Amount
+	}
+	return
+}
+
+func AddBlock(transactions []*Tx) {
+	b := newBlock(transactions)
 	b.mine()
 	b.persist()
 
@@ -136,7 +163,7 @@ func GetBlockChain() *blockChain {
 			checkpoint := db.LoadCheckpoint()
 			chain = &blockChain{"", 0, 0}
 			if checkpoint == nil {
-				AddBlock("GENESIS BLOCK")
+				AddBlock([]*Tx{CoinbaseTx("craftsangjae")})
 			} else {
 				utils.FromBytes(chain, checkpoint)
 			}

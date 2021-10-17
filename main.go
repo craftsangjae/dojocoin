@@ -6,12 +6,15 @@ import (
 )
 
 func main() {
-	AddBlock("안녕하세요")
-	AddBlock("새로운")
-	AddBlock("형태의")
-	AddBlock("블록체인입니다.")
+	AddBlock([]*Tx{CoinbaseTx("강상재")})
+	AddBlock([]*Tx{CoinbaseTx("강상재")})
+	AddBlock([]*Tx{CoinbaseTx("허진수")})
+	AddBlock([]*Tx{CoinbaseTx("조서형")})
+	AddBlock([]*Tx{CoinbaseTx("선우승환")})
 
 	for _, block := range ListAllBlocks() {
 		fmt.Println(block.MarshalJson())
 	}
+	fmt.Println(GetBlockChain().BalanceByAddress("강상재"))
+	fmt.Println(GetBlockChain().BalanceByAddress("허진수"))
 }
