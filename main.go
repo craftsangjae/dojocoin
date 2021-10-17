@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	. "github.com/craftsangjae/dojocoin/cryto"
+	. "github.com/craftsangjae/dojocoin/blockchain"
 	"os"
 )
 

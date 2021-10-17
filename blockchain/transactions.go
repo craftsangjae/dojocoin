@@ -1,4 +1,4 @@
-package cryto
+package blockchain
 
 import (
 	"github.com/craftsangjae/dojocoin/utils"

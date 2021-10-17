@@ -1,4 +1,4 @@
-package cryto
+package blockchain
 
 import (
 	"errors"
