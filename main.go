@@ -3,18 +3,25 @@ package main
 import (
 	"fmt"
 	. "github.com/craftsangjae/dojocoin/cryto"
+	"os"
 )
 
 func main() {
-	AddBlock([]*Tx{CoinbaseTx("강상재")})
-	AddBlock([]*Tx{CoinbaseTx("강상재")})
-	AddBlock([]*Tx{CoinbaseTx("허진수")})
-	AddBlock([]*Tx{CoinbaseTx("조서형")})
-	AddBlock([]*Tx{CoinbaseTx("선우승환")})
-
-	for _, block := range ListAllBlocks() {
-		fmt.Println(block.MarshalJson())
+	Mempool.AddTx("진수", 10)
+	Mempool.AddTx("서형", 10)
+	Mempool.AddTx("진수", 10)
+	AddBlock()
+	for _, name := range []string{"강상재", "진수", "서형"} {
+		fmt.Printf("%s : %d\n", name, BalanceByAddress(name))
 	}
-	fmt.Println(GetBlockChain().BalanceByAddress("강상재"))
-	fmt.Println(GetBlockChain().BalanceByAddress("허진수"))
+	fmt.Println("------------------------")
+
+	Mempool.AddTx("서형", 10)
+	AddBlock()
+	for _, name := range []string{"강상재", "진수", "서형"} {
+		fmt.Printf("%s : %d\n", name, BalanceByAddress(name))
+	}
+	fmt.Println("------------------------")
+
+	os.Remove("./blockchain.db")
 }

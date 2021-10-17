@@ -86,9 +86,9 @@ func (chain *blockChain) difficulty() int {
 
 // 새 블록을 생성합니다
 //
-func newBlock(transactions []*Tx) *block {
+func newBlock() *block {
 	prevHash := chain.NewestHash
-	return &block{transactions, "", prevHash, chain.Height + 1, chain.difficulty(), 0, 0}
+	return &block{nil, "", prevHash, chain.Height + 1, chain.difficulty(), 0, 0}
 }
 
 func initBlock() *block {
@@ -114,36 +114,41 @@ func (chain *blockChain) update(newBlock *block) {
 	chain.CurrentDifficulty = newBlock.Difficulty
 }
 
-func (chain *blockChain) txOuts() []*TxOut {
-	output := make([]*TxOut, 0)
+func UTxOutsByAddress(address string) (utxOuts []*UTxOut) {
+	creatorTxs := make(map[string]bool)
 	for _, block := range ListAllBlocks() {
 		for _, tx := range block.Transactions {
-			output = append(output, tx.TxOuts...)
+			for _, input := range tx.TxIns {
+				if input.Owner == address {
+					creatorTxs[input.TxID] = true
+				}
+			}
+			for index, output := range tx.TxOuts {
+				if output.Owner == address {
+					if _, ok := creatorTxs[tx.Id]; !ok {
+						utxOut := &UTxOut{tx.Id, index, output.Amount}
+						if !isOnMempool(utxOut) {
+							utxOuts = append(utxOuts, utxOut)
+						}
+					}
+				}
+			}
 		}
 	}
-	return output
+	return
 }
 
-func (chain *blockChain) txOutsByAddress(address string) []*TxOut {
-	output := make([]*TxOut, 0)
-	for _, tx := range chain.txOuts() {
-		if tx.Owner == address {
-			output = append(output, tx)
-		}
-	}
-	return output
-}
-
-func (chain *blockChain) BalanceByAddress(address string) (output int) {
-	for _, tx := range chain.txOutsByAddress(address) {
+func BalanceByAddress(address string) (output int) {
+	for _, tx := range UTxOutsByAddress(address) {
 		output += tx.Amount
 	}
 	return
 }
 
-func AddBlock(transactions []*Tx) {
-	b := newBlock(transactions)
+func AddBlock() {
+	b := newBlock()
 	b.mine()
+	b.Transactions = Mempool.TxToConfirm()
 	b.persist()
 
 	chain.update(b)
@@ -163,7 +168,7 @@ func GetBlockChain() *blockChain {
 			checkpoint := db.LoadCheckpoint()
 			chain = &blockChain{"", 0, 0}
 			if checkpoint == nil {
-				AddBlock([]*Tx{CoinbaseTx("craftsangjae")})
+				AddBlock()
 			} else {
 				utils.FromBytes(chain, checkpoint)
 			}

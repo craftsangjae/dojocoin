@@ -23,7 +23,14 @@ func NewTx(txIns []*TxIn, txOuts []*TxOut) *Tx {
 }
 
 type TxIn struct {
-	Owner  string
+	TxID  string
+	Index int
+	Owner string
+}
+
+type UTxOut struct {
+	TxID   string
+	Index  int
 	Amount int
 }
 
@@ -34,7 +41,7 @@ type TxOut struct {
 
 func CoinbaseTx(address string) *Tx {
 	txIns := []*TxIn{
-		{"COINBASE", minerReward},
+		{"", -1, "COINBASE"},
 	}
 	txOuts := []*TxOut{
 		{address, minerReward},
