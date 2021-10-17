@@ -2,6 +2,7 @@ package cryto
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/craftsangjae/dojocoin/db"
 	"github.com/craftsangjae/dojocoin/utils"
 	strings "strings"
@@ -10,7 +11,10 @@ import (
 )
 
 const (
-	difficulty int = 2
+	defaultDifficulty  int = 2
+	difficultyInterval int = 5 // 난이도 재조정 주기
+	blockInterval      int = 2 // 블록 별 시간
+	allowedRange       int = 2
 )
 
 var chain *blockChain
@@ -31,8 +35,9 @@ type block struct {
 }
 
 type blockChain struct {
-	NewestHash string `json:"newestHash"`
-	Height     int    `json:"height"`
+	NewestHash        string `json:"newestHash"`
+	Height            int    `json:"height"`
+	CurrentDifficulty int    `json:"currentDifficulty"`
 }
 
 func (b *block) MarshalJson() string {
@@ -49,11 +54,45 @@ func (chain *blockChain) persist() {
 	db.SaveBlockchain(chain)
 }
 
+func (chain *blockChain) recalculateDifficulty() int {
+	var err error
+	newstBlock, err := findLatestBlock(0)
+	utils.HandleErr(err)
+	lastRecalculatedBlock, err := findLatestBlock(difficultyInterval)
+	utils.HandleErr(err)
+	actualTime := (newstBlock.Timestamp - lastRecalculatedBlock.Timestamp) / 60
+	expectedTime := difficultyInterval * blockInterval
+
+	if actualTime < expectedTime-allowedRange {
+		return chain.CurrentDifficulty + 1
+	} else if actualTime > expectedTime+allowedRange {
+		return chain.CurrentDifficulty - 1
+	}
+	return chain.CurrentDifficulty
+}
+
+// 난이도를 계산합니다
+
+func (chain *blockChain) difficulty() int {
+	if chain.Height == 0 {
+		return defaultDifficulty
+	} else if chain.Height%5 == 0 {
+		// recalculate the difficulty
+		return chain.recalculateDifficulty()
+	} else {
+		return chain.CurrentDifficulty
+	}
+}
+
 // 새 블록을 생성합니다
 //
 func newBlock(data string) *block {
 	prevHash := chain.NewestHash
-	return &block{data, "", prevHash, chain.Height + 1, difficulty, 0, 0}
+	return &block{data, "", prevHash, chain.Height + 1, chain.difficulty(), 0, 0}
+}
+
+func initBlock() *block {
+	return &block{"", "", "", 0, 0, 0, 0}
 }
 
 func (b *block) mine() {
@@ -72,6 +111,7 @@ func (b *block) mine() {
 func (chain *blockChain) update(newBlock *block) {
 	chain.NewestHash = newBlock.Hash
 	chain.Height = newBlock.Height
+	chain.CurrentDifficulty = newBlock.Difficulty
 }
 
 func AddBlock(data string) {
@@ -84,7 +124,7 @@ func AddBlock(data string) {
 }
 
 func FindBlock(hash string) *block {
-	b := &block{"", "", "", 1, difficulty, 0, 0}
+	b := initBlock()
 	data := db.FindData(hash)
 	utils.FromBytes(b, data)
 	return b
@@ -94,7 +134,7 @@ func GetBlockChain() *blockChain {
 	if chain == nil {
 		once.Do(func() {
 			checkpoint := db.LoadCheckpoint()
-			chain = &blockChain{"", 0}
+			chain = &blockChain{"", 0, 0}
 			if checkpoint == nil {
 				AddBlock("GENESIS BLOCK")
 			} else {
@@ -116,4 +156,23 @@ func ListAllBlocks() []*block {
 		currentHash = blocks[len(blocks)-1].PrevHash
 	}
 	return blocks
+}
+
+func findLatestBlock(height int) (*block, error) {
+	return findBlockRecursive(height, GetBlockChain().NewestHash)
+}
+
+func findBlockRecursive(height int, hash string) (*block, error) {
+	b := FindBlock(hash)
+	if b == nil {
+		return nil, errors.New("Not Found")
+	}
+
+	if height == 0 {
+		return b, nil
+	} else if height > 0 {
+		return findBlockRecursive(height-1, b.PrevHash)
+	} else {
+		return nil, errors.New("Error")
+	}
 }
